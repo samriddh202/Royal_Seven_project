@@ -1,0 +1,161 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(janitor)
+library(tidytext)
+library(wordcloud)
+library(tm)
+library(reshape2)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(forcats)
+library(scales)
+```
+
+
+
+```{r}
+raw_data<-read.csv("Marlboro Cigarette.csv")
+
+
+marlboro_data<-raw_data %>% 
+  select(2,4,5,6,7,8) %>% 
+  mutate_all(na_if,"") 
+
+
+```
+
+
+
+
+```{r}
+data_sub<-marlboro_data %>% 
+  select(1,2,5,6) %>% 
+  rename(
+    earlier_cig=How.many.cigarette.packs.they.were.buying.,
+    discount_know=Did.you.tell.them.about.the.Discount.,
+    new_customer=Were.they.new.customer.,
+    latter_cig=How.many.Marlboro.Cigarettes..they.bought.in.total.. 
+  )%>% 
+  na.omit(data) 
+```
+
+
+```{r}
+customers<-data_sub %>% 
+  select(earlier_cig,latter_cig,new_customer)
+
+new_customers<-subset(customers,new_customer=="Yes") %>% 
+  select(1,2)
+
+table(new_customers)
+
+```
+
+```{r}
+regular_customers<-subset(customers,new_customer=="No") %>% 
+  select(1,2)
+
+table(regular_customers)
+```
+
+```{r}
+discount<-data_sub %>% 
+  select(earlier_cig,latter_cig,discount_know)
+
+discount_yes<-subset(discount,discount_know=="Yes") %>% 
+  select(1,2)
+
+table(discount_yes)
+```
+
+```{r}
+discount_no<-subset(discount,discount_know=="No") %>% 
+  select(1,2)
+
+table(discount_no)
+```
+
+## Sentiment Analysis
+
+```{r}
+words<-raw_data[9]
+
+sentence<-apply(words,2,paste,collapse=",")
+
+stop_words <- c('a', 'and', 'for', 'the','i','d','','on','to','too','my','me','it')
+
+fre_of_words<-data_frame(text = sentence) %>% 
+  mutate(text = tolower(text)) %>% 
+  mutate(text = str_replace_all(text, '[[:punct:]]'," ")) %>% 
+  mutate(tokens = str_split(text, "\\s+")) %>%
+  unnest() %>% 
+  count(tokens) %>% 
+  filter(!tokens %in% stop_words) %>% 
+  mutate(freq = n / sum(n)) %>% 
+  arrange(desc(n)) %>% 
+  rename(word=tokens)
+```
+
+
+```{r}
+cloud<-fre_of_words %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) 
+
+cloud %>% 
+  comparison.cloud(colors = c("red", "green"),)
+```
+
+
+
+```{r}
+set.seed(1234)
+wordcloud(words = fre_of_words$word, freq = fre_of_words$n, min.freq = 1,
+          max.words=100, random.order=FALSE, rot.per=0.40, 
+          colors=brewer.pal(5, "Dark2"))
+```
+
+```{r}
+other<-raw_data %>% 
+  select(2,3)
+
+other<-subset(other,Did.they.buy.the.Marlboro.Cigarettes.=="No")
+other<-table(other)
+other
+
+```
+
+
+```{r}
+
+data <- data.frame(
+  group=c("1","2","3","4 and more"),
+  value=c(124,23,1,4)
+)
+
+data<-data %>% 
+  mutate(prop = percent(value / sum(value)))
+
+# Basic piechart
+ggplot(data, aes(x="", y=value, fill=group)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0) +
+  scale_fill_manual(values=c("#0765E8", "#F90A15", "#F98F00","#3DC30A"))+
+  theme_void()+ # remove background, grid, numeric labels
+  coord_polar("y", start = 0) +
+       geom_label_repel(aes(label = prop), size=5, show.legend = F, nudge_x = 1) +
+       guides(fill = guide_legend(title = "Group"))
+  
+  
+```
+
